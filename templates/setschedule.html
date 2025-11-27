@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <title>Home Admin</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js" integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/timepicker/1.3.5/jquery.timepicker.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/timepicker/1.3.5/jquery.timepicker.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <script>
+        function setschedule() {
+            $.ajax({
+                url: "/api/v1/scheduled",
+                contentType: "application/json",
+                method: "POST",
+                data: JSON.stringify({
+                    timezone: $("#timezone").val(),
+                    starttime: $("#starttime").val(),
+                    endtime: $("#endtime").val()
+                }),
+            }).done(function(res) {
+                if (res.message) {
+                    alert("SUCCESS: " + res.message); 
+                } else {
+                    alert("ERROR: " + res.error);
+                }
+                window.location = "/";   
+            });
+        }
+    </script>
+    <script>
+        $(document).ready(function() {
+            $('#starttime').timepicker({
+            timeFormat: 'HH:mm',
+            interval: 30,
+            minTime: '00:00',
+            maxTime: '23:30',
+            dynamic: false,
+            dropdown: true,
+            scrollbar: true
+            });
+
+            $('#endtime').timepicker({
+            timeFormat: 'HH:mm',
+            interval: 30,
+            minTime: '00:00',
+            maxTime: '23:30',
+            dynamic: false,
+            dropdown: true,
+            scrollbar: true
+            });
+        });
+    </script>
+    <script>
+        // 현재 브라우저 타임존 감지
+        function detectTimezone() {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone;
+        }
+
+        // 선택된 타임존 기준으로 시간 표시
+        function updateTime(timezone) {
+            const now = new Date();
+            const options = {
+                timeZone: timezone,
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            };
+            const formatter = new Intl.DateTimeFormat('ko-KR', options);
+            $('#current-time').text(formatter.format(now));
+        }
+
+        $(document).ready(function() {
+            const initialTimezone = detectTimezone();
+            $('#current-timezone').text(initialTimezone);
+            $('#timezone-select').val(initialTimezone);
+            updateTime(initialTimezone);
+
+            // 타임존 변경 이벤트
+            $('#timezone-select').on('change', function() {
+                const selectedTimezone = $(this).val();
+                $('#current-timezone').text(selectedTimezone);
+                updateTime(selectedTimezone);
+            });
+
+            // 시간 갱신 (1초마다)
+            setInterval(function() {
+                const tz = $('#timezone-select').val();
+                updateTime(tz);
+            }, 1000);
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="row mt-5">
+            <h1>Scheduled Charging Settings</h1>
+        </div>
+        <div class="row mt-5">
+            <div class="col-12">
+                <form id="range">
+                    <div class="form-group">
+                        <label for="timezone">Timezone</label>
+                        <select id="timezone" class="form-select">
+                            <option value="America/Los_Angeles">America/Los_Angeles</option>
+                            <option value="America/Denver">America/Denver</option>
+                            <option value="America/Chicago">America/Chicago</option>
+                            <option value="America/New_York">America/New_York</option>
+                            <option value="Europe/London">Europe/London</option>
+                            <option value="America/Anchorage">America/Anchorage</option>
+                            <option value="Asia/Seoul">Asia/Seoul</option>
+                            <option value="UTC">UTC</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="starttime">Start Time</label>
+                        <input type="text" id="starttime" class="form-control" placeholder="Start Time" name="starttime">
+                    </div>
+                    <div class="form-group">
+                        <label for="endtime">End Time</label>
+                        <input type="text" id="endtime" class="form-control" placeholder="End Time" name="endtime">
+                    </div>
+                    <button type="button" class="btn btn-primary mt-3" onclick="setschedule()">Submit</button>
+                </form>
+            </div>
+        </div>
+
+    </div>
+    
+</body>
+</html>

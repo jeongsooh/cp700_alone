@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <title>Home Admin</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js" integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script>
+        function devregist() {
+            $.ajax({
+                url: "/api/v1/devices",
+                contentType: "application/json",
+                method: "POST",
+                data: JSON.stringify({
+                    serialnumber: $("#serialnumber").val(),
+                    maxcurrent: $("#maxcurrent").val()
+                }),
+            }).done(function(res) {
+                if (res.message) {
+                    alert("SUCCESS: " + res.message); 
+                } else {
+                    alert("ERROR: " + res.error);
+                }
+                window.location = "/";   
+            });
+        }
+    </script>
+
+</head>
+<body>
+    <div class="container">
+        <div class="row mt-5">
+            <h1>Measuring Device Registration</h1>
+        </div>
+        <div class="row mt-5">
+            <div class="col-12">
+                <form>
+                    <div class="form-group">
+                        <label for="serialnumber">Login ID</label>
+                        <input type="text" id="serialnumber" class="form-control" placeholder="Serial Number" name="serialnumber">
+                    </div>
+                    <div class="form-group">
+                        <label for="maxcurrent">User Name</label>
+                        <input type="text" id="maxcurrent" class="form-control" placeholder="Max. Current" name="maxcurrent">
+                    </div>
+                    <button type="button" class="btn btn-primary mt-3" onclick="devregist()">Submit</button>
+                </form>
+            </div>
+        </div>
+
+    </div>
+    
+</body>
+</html>

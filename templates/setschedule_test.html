@@ -1,0 +1,58 @@
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <title>Home Admin</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://momentjs.com/downloads/moment.min.js"></script>
+    <script src="https://momentjs.com/downloads/moment-timezone-with-data.min.js"></script>
+</head>
+<body>
+    <h2>🕒 현재 타임존: <span id="current-timezone"></span></h2>
+
+    <label for="timezone-picker">타임존 선택:</label>
+    <input list="timezone-list" id="timezone-picker" placeholder="예: Asia/Seoul">
+    <datalist id="timezone-list"></datalist>
+
+    <p>📅 현재 시간: <span id="current-time"></span></p>
+
+    <script>
+        // 모든 타임존을 datalist에 추가
+        const timezones = moment.tz.names();
+        console.log(timezones);
+        timezones.forEach(function(tz) {
+            $('#timezone-list').append(`<option value="${tz}">`);
+        });
+
+        // 초기 타임존 설정
+        const initialTimezone = moment.tz.guess();
+        $('#current-timezone').text(initialTimezone);
+        $('#timezone-picker').val(initialTimezone);
+        updateTime(initialTimezone);
+
+        // 시간 업데이트 함수
+        function updateTime(timezone) {
+            const now = moment().tz(timezone);
+            $('#current-time').text(now.format('YYYY-MM-DD HH:mm:ss'));
+        }
+
+        // 타임존 변경 이벤트
+        $('#timezone-picker').on('input', function() {
+            const selectedTimezone = $(this).val();
+            if (moment.tz.zone(selectedTimezone)) {
+                $('#current-timezone').text(selectedTimezone);
+                updateTime(selectedTimezone);
+            }
+        });
+
+        // 실시간 시간 갱신
+        setInterval(function() {
+            const tz = $('#timezone-picker').val();
+            if (moment.tz.zone(tz)) {
+                updateTime(tz);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
