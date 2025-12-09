@@ -20,6 +20,22 @@ class Fcuser(db.Model):
             'username': self.username
         }
 
+class Charger(db.Model):
+    __tablename__ = 'charger'
+    id = db.Column(db.Integer, primary_key=True)
+    charger_id = db.Column(db.String(32), unique=True, nullable=False)
+    vendor = db.Column(db.String(32), nullable=False)
+    connected = db.Column(db.Boolean, default=False, nullable=False)
+
+    @property
+    def serialize(self):
+        return {
+            'id': self.id,
+            'charger_id': self.charger_id,
+            'vendor': self.vendor,
+            'connected': self.connected
+        }
+
 class Energy(db.Model):
     __tablename__ = 'energy'
     id = db.Column(db.Integer, primary_key=True)
@@ -41,13 +57,18 @@ class Card(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cardname = db.Column(db.String(32), unique=True, nullable=False)
     cardnumber = db.Column(db.String(32), unique=True, nullable=False)
+    status = db.Column(db.String(32), unique=True, nullable=False)
+    expirydate = db.Column(db.DateTime, nullable=False)
 
     @property
     def serialize(self):
+        expirydate_str = self.expirydate.strftime('%Y-%m-%dT%H:%M:%S') if self.expirydate else None
         return {
             'id': self.id,
             'cardname': self.cardname,
             'cardnumber': self.cardnumber,
+            'status': self.status,
+            'expirydate': expirydate_str
         }
 
 class Scheduled(db.Model):

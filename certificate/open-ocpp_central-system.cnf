@@ -1,0 +1,20 @@
+[req]
+distinguished_name	= req_distinguished_name
+
+# Stop confirmation prompts. All information is contained below.
+prompt			= no
+
+# The extensions to add to a certificate request
+x509_extensions = v3_ca
+
+[req_distinguished_name]
+countryName =            KR
+stateOrProvinceName =    Seoul
+localityName =           Seoul
+organizationName =       GRESYSTEM
+organizationalUnitName = R&D
+commonName =             Central System
+emailAddress =           gre@gresystem.co.kr
+
+[v3_ca]
+basicConstraints = CA:FALSE

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset='utf-8'>
+    <title>EV Charging CMS Admin Login</title>
+    <!-- 뷰포트 메타 태그는 반응형 디자인의 필수 요소입니다. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Tailwind CSS 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Bootstrap JS 로드 (Custom Modal 사용을 위해 유지) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+
+    <style>
+        /* Inter 폰트 설정 및 배경색 설정 */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+            color: #1f2937; /* Gray 800 */
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        /* 버튼 스타일 - w-full 대신 고정 너비 및 중앙 정렬을 위해 수정 */
+        .btn-primary {
+            /* Tailwind의 기본 버튼 스타일 유지 및 그림자 강화 */
+            /* w-full 제거 및 max-w-xs (최대 320px)로 너비 제한, block 및 mx-auto로 중앙 정렬 */
+            @apply bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-lg hover:bg-indigo-700 hover:shadow-xl transition duration-150 ease-in-out block max-w-xs mx-auto;
+        }
+    </style>
+
+    <!-- 외부 JS 라이브러리: jQuery, jQuery Cookie -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <script>
+        // =======================================================
+        // 1. CUSTOM MODAL IMPLEMENTATION (FROM home.html)
+        // =======================================================
+
+        let resolveModal = null;
+
+        /**
+         * 사용자 정의 모달을 표시합니다.
+         * 이 함수는 alert() 및 confirm()을 대체합니다.
+         * @param {string} title 모달 제목
+         * @param {string} body 모달 내용
+         * @param {boolean} isConfirmation 확인 버튼 필요 여부
+         * @returns {Promise<boolean>} 확인/취소 결과 (확인: true, 취소/닫기: false)
+         */
+        function showCustomModal(title, body, isConfirmation = false) {
+            $("#customModalLabel").text(title);
+            $("#customModalBody").html(body);
+            
+            const confirmBtn = $("#customModalConfirm");
+            const footer = $("#customModalFooter");
+            
+            if (isConfirmation) {
+                confirmBtn.removeClass('hidden').show();
+                confirmBtn.text("확인");
+                footer.find('button:not(#customModalConfirm)').text("취소");
+            } else {
+                confirmBtn.hide();
+                footer.find('button:not(#customModalConfirm)').text("닫기");
+            }
+
+            const modal = new bootstrap.Modal(document.getElementById('customModal'));
+            modal.show();
+
+            return new Promise(resolve => {
+                resolveModal = resolve;
+            });
+        }
+
+        $(document).on('click', '#customModalConfirm', function() {
+            if (resolveModal) {
+                resolveModal(true);
+            }
+            $('#customModal').data('bs.modal')._isConfirmed = true; 
+            bootstrap.Modal.getInstance(document.getElementById('customModal')).hide();
+        });
+
+        $('#customModal').on('hidden.bs.modal', function () {
+            const isConfirmed = $(this).data('bs.modal')._isConfirmed;
+            const isConfirmationMode = $("#customModalConfirm").is(':visible');
+
+            if (resolveModal && (!isConfirmationMode || !isConfirmed)) {
+                 resolveModal(false); 
+            }
+            
+            $(this).data('bs.modal')._isConfirmed = false;
+            resolveModal = null;
+        });
+        
+        $('#customModal').data('bs.modal', { _isConfirmed: false });
+
+        // =======================================================
+        // 2. LOGIN FUNCTION
+        // =======================================================
+        function login() {
+            const userid = $("#userid").val();
+            const password = $("#password").val();
+
+            if (!userid || !password) {
+                 showCustomModal("경고", "아이디와 비밀번호를 모두 입력해주세요.");
+                 return;
+            }
+
+            $.ajax({
+                url: "/auth",
+                contentType: "application/json; charset=utf-8",
+                method: "POST",
+                data: JSON.stringify({
+                    userid: userid,
+                    password: password
+                }),
+            }).done(function(res) {
+                // 로그인 성공 시 토큰 저장 및 메인 페이지로 이동
+                $.cookie("access_token", res.access_token, { path: '/' });
+                // 미리보기 환경 404 방지를 위해 절대 경로 사용
+                window.location.replace(window.location.origin + "/");
+            }).fail(function(xhr) {
+                // 로그인 실패 시 모달 표시
+                let errorMessage = "로그인 요청에 실패했습니다. 서버 오류입니다.";
+                if (xhr.status === 401 || xhr.status === 403) {
+                    errorMessage = "아이디 또는 비밀번호가 올바르지 않습니다.";
+                } else if (xhr.responseText) {
+                    try {
+                        const res = JSON.parse(xhr.responseText);
+                        errorMessage = res.detail || errorMessage;
+                    } catch (e) {
+                        // 응답이 JSON이 아닌 경우 원본 텍스트 사용
+                        errorMessage = xhr.responseText;
+                    }
+                }
+                showCustomModal("로그인 실패", errorMessage);
+            });
+        }
+        
+        // Enter 키를 누르면 로그인 함수 호출
+        $(document).ready(function() {
+            $("#password").keypress(function(event) {
+                if (event.which === 13) {
+                    login();
+                }
+            });
+        });
+    </script>
+</head>
+<body>
+    <!-- Main Content Area: Centered Card -->
+    <div class="w-full max-w-sm mx-auto p-6">
+        <div class="bg-white p-8 rounded-xl shadow-2xl border border-gray-100">
+            <!-- 텍스트 크기를 text-3xl에서 text-2xl로 줄여 한 줄에 표시되도록 수정 -->
+            <h1 class="text-2xl font-extrabold text-center text-gray-900 mb-6">CP700P 관리자 로그인</h1>
+            
+            <form onsubmit="return false;" class="mx-auto">
+                <!-- Login ID Input -->
+                <div class="mb-4">
+                    <label for="userid" class="block text-sm font-medium text-gray-700 mb-1">아이디</label>
+                    <input type="text" id="userid" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" placeholder="관리자 ID" name="userid" required>
+                </div>
+
+                <!-- Password Input -->
+                <div class="mb-6">
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                    <input type="password" id="password" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" placeholder="비밀번호" name="password" required>
+                </div>
+                
+                <!-- Login Button - 더욱 눈에 띄게 그림자 강화 및 중앙 정렬 -->
+                <div class="flex justify-center border border-gray-300 ">
+                    <button type="button" class="btn-primary" onclick="login()">로그인</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Custom Modal Structure (Hidden by default) -->
+    <div class="modal fade" id="customModal" tabindex="-1" aria-labelledby="customModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-xl shadow-2xl">
+          <div class="modal-header border-b border-gray-200">
+            <h5 class="modal-title text-xl font-bold text-gray-800" id="customModalLabel"></h5>
+            <button type="button" class="btn-close text-gray-400 hover:text-gray-600" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-gray-700" id="customModalBody">
+          </div>
+          <div class="modal-footer border-t border-gray-200" id="customModalFooter">
+            <button type="button" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition" data-bs-dismiss="modal">닫기</button>
+            <button type="button" class="btn-primary hidden" id="customModalConfirm">확인</button>
+          </div>
+        </div>
+      </div>
+    </div>
+</body>
+</html>

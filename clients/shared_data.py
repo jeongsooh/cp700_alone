@@ -13,16 +13,17 @@ HB_INTERVAL = 180 # Heartbeat 주기 (초)
 FLASK_PORT = 5000
 
 # --- 💾 공유 데이터 저장소 (DB 대체) ---
-# registered_chargers: GRE + Serial Number 기반 충전기 등록 정보
 SHARED_DATA = {
     "registered_chargers": {
         "CHG-TEST-001": {"chargePointVendor": "Test", "chargePointModel": "A1", "connected": False},
+        "CHG-TEST-002": {"chargePointVendor": "Test", "chargePointModel": "B2", "connected": False},
+        "CHG-TEST-003": {"chargePointVendor": "Test", "chargePointModel": "C2", "connected": False},
         "PL10200787": {"chargePointVendor": "GRESYSTEM", "chargePointModel": "CP700P", "connected": False},
         "JY710102": {"chargePointVendor": "Jinyoung", "chargePointModel": "JY-070-W4", "connected": False}
     },
     "registered_id_tags": {
-        "00000000F0C8FADD": {"status": "Accepted", "cardname": "", "expiryDate": "2030-01-01T00:00:00Z"},
-        "00000000790ACB20": {"status": "Blocked", "cardname": "", "expiryDate": "2030-01-01T00:00:00Z"}
+        "test01": {"status": "Accepted", "expiryDate": "2030-01-01T00:00:00Z"},
+        "test02": {"status": "Blocked", "expiryDate": None}
     }
 }
 

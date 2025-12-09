@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset='utf-8'>
+    <title>EV Charging CMS Home Admin</title>
+    <!-- 뷰포트 메타 태그는 반응형 디자인의 필수 요소입니다. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Tailwind CSS 로드 (Bootstrap 대체) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Inter 폰트 설정 및 배경색 설정 */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            color: #1f2937; /* Gray 800 */
+        }
+        /* 테이블 셀 내부의 텍스트 줄바꿈 방지 및 중앙 정렬 */
+        .admin-table th, .admin-table td {
+            @apply px-4 py-2 align-middle;
+        }
+        /* 버튼 스타일 */
+        .btn-primary {
+            @apply bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 ease-in-out;
+        }
+        .btn-danger {
+            @apply bg-red-600 text-white font-semibold py-1 px-3 text-sm rounded-lg hover:bg-red-700 transition duration-150 ease-in-out;
+        }
+        /* 카드 스타일 */
+        .card-container {
+            @apply bg-white p-6 rounded-xl shadow-lg border border-gray-100;
+        }
+    </style>
+
+    <!-- 외부 JS 라이브러리: jQuery, Bootstrap JS (모달 기능 활용을 위해 유지), jQuery Cookie -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <script>
+        const API_BASE = "/api/v1";
+
+        // =======================================================
+        // 1. CUSTOM MODAL IMPLEMENTATION (REPLACES alert() and confirm())
+        // =======================================================
+
+        let resolveModal = null;
+
+        /**
+         * 사용자 정의 모달을 표시합니다.
+         * @param {string} title 모달 제목
+         * @param {string} body 모달 내용
+         * @param {boolean} isConfirmation 확인 버튼 필요 여부
+         * @returns {Promise<boolean>} 확인/취소 결과 (확인: true, 취소/닫기: false)
+         */
+        function showCustomModal(title, body, isConfirmation = false) {
+            $("#customModalLabel").text(title);
+            $("#customModalBody").html(body);
+            
+            const confirmBtn = $("#customModalConfirm");
+            const footer = $("#customModalFooter");
+            
+            if (isConfirmation) {
+                confirmBtn.removeClass('hidden').show();
+                confirmBtn.text("확인");
+                footer.find('button:not(#customModalConfirm)').text("취소");
+            } else {
+                confirmBtn.hide();
+                footer.find('button:not(#customModalConfirm)').text("닫기");
+            }
+
+            const modal = new bootstrap.Modal(document.getElementById('customModal'));
+            modal.show();
+
+            return new Promise(resolve => {
+                resolveModal = resolve;
+            });
+        }
+
+        $(document).on('click', '#customModalConfirm', function() {
+            if (resolveModal) {
+                resolveModal(true);
+            }
+            // 모달을 닫기 전에 확인 버튼 클릭 플래그 설정
+            $('#customModal').data('bs.modal')._isConfirmed = true; 
+            bootstrap.Modal.getInstance(document.getElementById('customModal')).hide();
+        });
+
+        // '취소'나 '닫기' 버튼 클릭 및 배경 클릭 시
+        $('#customModal').on('hidden.bs.modal', function () {
+            // Confirm 모드가 아니거나, Confirm 모드에서 확인이 눌리지 않은 경우에만 false로 resolve
+            const isConfirmed = $(this).data('bs.modal')._isConfirmed;
+            const isConfirmationMode = $("#customModalConfirm").is(':visible');
+
+            if (resolveModal && (!isConfirmationMode || !isConfirmed)) {
+                 resolveModal(false); 
+            }
+            
+            // 플래그 초기화
+            $(this).data('bs.modal')._isConfirmed = false;
+            resolveModal = null;
+        });
+        
+        // Confirmation 플래그를 관리하기 위한 초기화
+        $('#customModal').data('bs.modal', { _isConfirmed: false });
+
+
+        // AJAX Helper with Auth Header
+        function makeAuthAjaxCall(url, method, data = null) {
+            return $.ajax({
+                url: url,
+                contentType: "application/json; charset=utf-8",
+                method: method,
+                data: data ? JSON.stringify(data) : null,
+                beforeSend: function(xhr) {
+                    const token = $.cookie("access_token");
+                    if (token) {
+                        xhr.setRequestHeader("Authorization", "Bearer " + token);
+                    }
+                }
+            });
+        }
+
+        // =======================================================
+        // 2. INITIAL LOAD AND HANDLERS
+        // =======================================================
+
+        $(document).ready(function() {
+            if ($.cookie("access_token")) {
+                $("#logout-div").show();
+                loadAllData();
+            } else {
+                $("#logout-div").hide();
+                // FIX: 상대 경로 오류 해결을 위해 절대 경로로 변경
+                window.location.replace(window.location.origin + "/login"); 
+            }
+        });
+
+        function loadAllData() {
+            // 초기 사용자 API 테스트 (인증 확인 목적)
+            makeAuthAjaxCall(API_BASE + "/users", "GET")
+                .done(function(res) {
+                    // console.log("Auth verified. User Data:", res);
+                    // $("#content").text(JSON.stringify(res));
+                })
+                .fail(function(xhr) {
+                    // 401 Unauthorized 등 발생 시 로그인 페이지로 이동
+                    if (xhr.status === 401 || xhr.status === 403) {
+                        // FIX: 상대 경로 오류 해결을 위해 절대 경로로 변경
+                        window.location.replace(window.location.origin + "/login");
+                    } else {
+                        showCustomModal("오류", "API 서버에 접속할 수 없습니다. " + xhr.statusText);
+                    }
+                });
+
+            loadCardData();
+            loadDeviceData();
+            loadScheduleData();
+        }
+
+        function loadCardData() {
+            makeAuthAjaxCall(API_BASE + "/cards", "GET")
+                .done(function(cards) {
+                    const content = document.getElementById('card-content');
+                    content.innerHTML = '';
+                    
+                    if (cards && cards.length > 0) {
+                        cards.forEach((card) => {
+                            const row = document.createElement('tr');
+                            row.className = 'border-t';
+                            row.innerHTML = `
+                            <td scope="row" class="font-medium">${card.id}</td>
+                            <td>${card.cardname}</td>
+                            <td>${card.cardnumber}</td>
+                            <td>
+                                <button class="btn-danger" onclick="card_delete(${card.id})">Delete</button>
+                            </td>
+                            `;
+                            content.appendChild(row);
+                        });
+                    } else {
+                        content.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">등록된 카드가 없습니다.</td></tr>';
+                    }
+                })
+                .fail(error => {
+                    console.error('Failed to get Card list:', error);
+                    $("#card-content").html('<tr class="text-red-500"><td colspan="4" class="text-center py-4">카드 정보를 불러오지 못했습니다.</td></tr>');
+                });
+        }
+
+        function loadDeviceData() {
+            makeAuthAjaxCall(API_BASE + "/devices", "GET")
+                .done(function(devices) {
+                    const content = document.getElementById('device-content');
+                    content.innerHTML = '';
+
+                    if (devices && devices.length > 0) {
+                        devices.forEach((device) => {
+                            const row = document.createElement('tr');
+                            row.className = 'border-t';
+                            row.innerHTML = `
+                            <td scope="row" class="font-medium">${device.id}</td>
+                            <td>${device.serialnumber}</td>
+                            <td>${device.maxcurrent}A</td>
+                            <td class="${device.schedule_enabled ? 'text-green-600 font-bold' : 'text-gray-500'}">${device.schedule_enabled ? 'Enabled' : 'Disabled'}</td>
+                            <td>
+                                <button class="btn-danger" onclick="device_delete(${device.id})">Delete</button>
+                            </td>
+                            `;
+                            content.appendChild(row);
+                        });
+                    } else {
+                         content.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-gray-500">등록된 장치가 없습니다.</td></tr>';
+                    }
+                    
+                    const scheduleStatusDiv = document.getElementById('schedule-status-display');
+                    const isScheduleEnabled = devices.some(device => device.schedule_enabled);
+                    scheduleStatusDiv.innerHTML = `
+                        <h5 class="text-xl font-semibold mb-2">스케줄 상태: <span class="${isScheduleEnabled ? 'text-green-600' : 'text-red-500'}">${isScheduleEnabled ? '활성화됨' : '비활성화됨'}</span></h5>
+                    `;
+                })
+                .fail(error => {
+                    console.error('Failed to get Device list:', error);
+                    $("#device-content").html('<tr class="text-red-500"><td colspan="5" class="text-center py-4">장치 정보를 불러오지 못했습니다.</td></tr>');
+                });
+        }
+
+        function loadScheduleData() {
+            makeAuthAjaxCall(API_BASE + "/scheduled", "GET")
+                .done(function(schedules) {
+                    const content = document.getElementById('schedule-content');
+                    content.innerHTML = '';
+                    
+                    if (schedules && schedules.length > 0) {
+                        schedules.forEach((schedule) => {
+                            const row = document.createElement('tr');
+                            row.className = 'border-t';
+                            row.innerHTML = `
+                            <td scope="row" class="font-medium">${schedule.id}</td>
+                            <td>${schedule.timezone}</td>
+                            <td>${schedule.starttime}</td>
+                            <td>${schedule.endtime}</td>
+                            <td>
+                                <button class="btn-danger" onclick="schedule_delete(${schedule.id})">Delete</button>
+                            </td>
+                            `;
+                            content.appendChild(row);
+                        });
+                    } else {
+                        content.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-gray-500">설정된 스케줄이 없습니다.</td></tr>';
+                    }
+                })
+                .fail(error => {
+                    console.error('Failed to get Schedule list:', error);
+                    $("#schedule-content").html('<tr class="text-red-500"><td colspan="5" class="text-center py-4">스케줄 정보를 불러오지 못했습니다.</td></tr>');
+                });
+        }
+
+        function logout() {
+            $.removeCookie("access_token", { path: '/' });
+            // FIX: 상대 경로 오류 해결을 위해 절대 경로로 변경
+            window.location.replace(window.location.origin + "/login");
+        }
+        
+        // =======================================================
+        // 3. NAVIGATION HANDLER (PREVENTS 404 IN SINGLE-FILE PREVIEW)
+        // =======================================================
+
+        /**
+         * 단일 파일 미리보기 환경에서 페이지 이동 시 발생하는 404 오류를 방지하고 안내 모달을 표시합니다.
+         * @param {string} route 이동하려던 경로
+         */
+        function handleNavigation(route) {
+            window.location.replace(window.location.origin + route);
+            // showCustomModal(
+            //     "페이지 이동 안내", 
+            //     `이 버튼은 **${route}** 경로로 이동하도록 설계되었으나, 현재는 단일 파일 미리보기 환경이므로 실제 페이지 이동 대신 안내 메시지를 표시합니다.`,
+            //     false
+            // );
+        }
+
+        // =======================================================
+        // 4. CRUD HANDLERS (UPDATED TO USE MODAL)
+        // =======================================================
+
+        async function card_delete(card_id) {
+            const confirmed = await showCustomModal(
+                "카드 삭제 확인", 
+                `정말로 이 카드 ID (${card_id})를 삭제하시겠습니까?`, 
+                true
+            );
+
+            if (confirmed) {
+                makeAuthAjaxCall(`${API_BASE}/cards/${card_id}`, 'DELETE')
+                    .done(function() {
+                        showCustomModal("성공", "카드가 성공적으로 삭제되었습니다.");
+                        loadCardData(); // 데이터 새로고침
+                    })
+                    .fail(function(xhr, status, error) {
+                        showCustomModal("삭제 실패", `카드 삭제에 실패했습니다: ${xhr.responseText || error}`);
+                    });
+            }
+        }
+
+        async function device_delete(device_id) {
+             const confirmed = await showCustomModal(
+                "장치 삭제 확인", 
+                `정말로 이 장치 ID (${device_id})를 삭제하시겠습니까?`, 
+                true
+            );
+
+            if (confirmed) {
+                makeAuthAjaxCall(`${API_BASE}/devices/${device_id}`, 'DELETE')
+                    .done(function() {
+                        showCustomModal("성공", "장치가 성공적으로 삭제되었습니다.");
+                        loadDeviceData(); // 데이터 새로고침
+                    })
+                    .fail(function(xhr, status, error) {
+                        showCustomModal("삭제 실패", `장치 삭제에 실패했습니다: ${xhr.responseText || error}`);
+                    });
+            }
+        }
+        
+        function schedule_enable() {
+            // PUT 요청은 일반적으로 토글을 수행하며, API에 따라 요청 본문이 필요 없을 수도 있습니다.
+            // 여기서는 임시 데이터로 PUT 요청을 보냅니다. 실제 API에 맞게 조정이 필요할 수 있습니다.
+            makeAuthAjaxCall(`${API_BASE}/devices/1`, 'PUT', { schedule_toggle: true }) // 임의의 ID 1 사용
+                .done(function() {
+                    showCustomModal("성공", "스케줄 활성화/비활성화 상태가 성공적으로 토글되었습니다.");
+                    loadDeviceData(); // 상태 확인을 위해 장치 데이터 새로고침
+                })
+                .fail(function(xhr, status, error) {
+                    showCustomModal("토글 실패", `스케줄 상태 변경에 실패했습니다: ${xhr.responseText || error}`);
+                });
+        }
+
+        async function schedule_delete(schedule_id) {
+            const confirmed = await showCustomModal(
+                "스케줄 삭제 확인", 
+                `정말로 이 충전 스케줄 ID (${schedule_id})를 삭제하시겠습니까?`, 
+                true
+            );
+
+            if (confirmed) {
+                makeAuthAjaxCall(`${API_BASE}/scheduled/${schedule_id}`, 'DELETE')
+                    .done(function() {
+                        showCustomModal("성공", "충전 스케줄이 성공적으로 삭제되었습니다.");
+                        loadScheduleData(); // 데이터 새로고침
+                    })
+                    .fail(function(xhr, status, error) {
+                        showCustomModal("삭제 실패", `스케줄 삭제에 실패했습니다: ${xhr.responseText || error}`);
+                    });
+            }
+        }
+    </script>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-4 mb-6">
+            <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900">CP700P 설정 관리</h1>
+            <div class="mt-4 md:mt-0 space-x-2" id="logout-div">
+                <!-- 변경: location.href를 handleNavigation 함수 호출로 대체 -->
+                <button class="btn-primary" onclick="handleNavigation('/chpasswd')">비밀번호 변경</button>
+                <button class="btn-primary" onclick="logout();">로그아웃</button>
+            </div>
+        </header>
+
+        <!-- Device and Card Management (Stacks on Mobile) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            
+            <!-- 1. Wifi Device Settings -->
+            <div class="card-container">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-xl font-bold text-gray-800">Wifi 장치 설정</h4>
+                    <!-- 변경: location.href를 handleNavigation 함수 호출로 대체 -->
+                    <button class="btn-primary text-sm py-1 px-3" onclick="handleNavigation('/devregister')">장치 추가</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-gray-600 admin-table border border-gray-300">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 rounded-t-lg">
+                            <tr>
+                                <th scope="col" class="rounded-tl-lg">#</th>
+                                <th scope="col">일련번호</th>
+                                <th scope="col">최대 전류[A]</th>
+                                <th scope="col">스케줄 사용</th>
+                                <th scope="col" class="rounded-tr-lg">삭제</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200" id="device-content">
+                            <!-- Device data will be loaded here -->
+                            <tr><td colspan="5" class="text-center py-4">장치 로딩 중...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 2. Charging Cards Registration -->
+            <div class="card-container">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
+                    <h4 class="text-xl font-bold text-gray-800">충전 카드 등록</h4>
+                    <div class="space-x-2 flex">
+                        <!-- 변경: location.href를 handleNavigation 함수 호출로 대체 -->
+                        <button class="btn-primary text-sm py-1 px-3" onclick="handleNavigation('/cardregister')">카드 추가</button>
+                        <!-- 변경: location.href를 handleNavigation 함수 호출로 대체 -->
+                        <button class="btn-primary text-sm py-1 px-3" onclick="handleNavigation('/cardregisteronline')">온라인 등록</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-gray-600 admin-table border border-gray-300">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 rounded-t-lg">
+                            <tr>
+                                <th scope="col" class="rounded-tl-lg">#</th>
+                                <th scope="col">카드 이름</th>
+                                <th scope="col">카드 번호</th>
+                                <th scope="col" class="rounded-tr-lg">삭제</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200" id="card-content">
+                            <!-- Card data will be loaded here -->
+                            <tr><td colspan="4" class="text-center py-4">카드 로딩 중...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scheduled Charging Settings -->
+        <div class="card-container">
+            <h4 class="text-xl font-bold text-gray-800 mb-4 border-b pb-3">예약 충전 설정</h4>
+
+            <div class="mb-4 text-sm text-gray-600 space-y-1">
+                <p>1. **활성화/비활성화** 버튼을 클릭하여 예약 충전을 제어합니다.</p>
+                <p>2. 충전 중 카드 태그 또는 케이블 분리 시 충전이 중단됩니다.</p>
+                <p>3. 예약 충전이 활성화되어 있어도, 카드가 인증되고 케이블이 연결되면 즉시 충전이 시작됩니다.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+                <!-- Schedule Status and Toggle (col-span-12 on mobile, col-span-4 on desktop) -->
+                <div class="md:col-span-4 flex flex-col space-y-4">
+                    <div id="schedule-status-display" class="p-3 bg-gray-50 rounded-lg">
+                        <!-- Schedule status will be loaded here -->
+                        <h5 class="text-xl font-semibold mb-2">스케줄 상태: <span class="text-gray-500">로딩 중...</span></h5>
+                    </div>
+                    <button class="btn-primary w-full" onclick="schedule_enable()">스케줄 활성화 / 비활성화 토글</button>
+                    <!-- 변경: location.href를 handleNavigation 함수 호출로 대체 -->
+                    <button class="btn-primary w-full" onclick="handleNavigation('/setschedule')">스케줄 설정</button>
+                </div>
+
+                <!-- Schedule List (col-span-12 on mobile, col-span-8 on desktop) -->
+                <div class="md:col-span-8 overflow-x-auto">
+                    <table class="w-full text-left text-sm text-gray-600 admin-table border border-gray-300">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 rounded-t-lg">
+                            <tr>
+                                <th scope="col" class="rounded-tl-lg">#</th>
+                                <th scope="col">시간대</th>
+                                <th scope="col">시작 시간</th>
+                                <th scope="col">종료 시간</th>
+                                <th scope="col" class="rounded-tr-lg">삭제</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200" id="schedule-content">
+                            <!-- Schedule data will be loaded here -->
+                            <tr><td colspan="5" class="text-center py-4">스케줄 로딩 중...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Modal Structure (Hidden by default) -->
+    <!-- Modal is needed for confirmation/alert messages -->
+    <div class="modal fade" id="customModal" tabindex="-1" aria-labelledby="customModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-xl shadow-2xl">
+          <div class="modal-header border-b border-gray-200">
+            <h5 class="modal-title text-xl font-bold text-gray-800" id="customModalLabel"></h5>
+            <button type="button" class="btn-close text-gray-400 hover:text-gray-600" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-gray-700" id="customModalBody">
+          </div>
+          <div class="modal-footer border-t border-gray-200" id="customModalFooter">
+            <button type="button" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition" data-bs-dismiss="modal">취소</button>
+            <button type="button" class="btn-primary hidden" id="customModalConfirm">확인</button>
+          </div>
+        </div>
+      </div>
+    </div>
+</body>
+</html>

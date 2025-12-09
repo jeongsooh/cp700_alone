@@ -11,7 +11,7 @@ from api_v1.user import create_default_user
 app = Flask(__name__)
 app.register_blueprint(api_v1, url_prefix='/api/v1')
 FLASK_PORT = 5000
-OCPP_HOST = '127.0.0.1'
+OCPP_HOST = '0.0.0.0'
 OCPP_PORT = 443
 
 @app.route('/chpasswd')
@@ -87,12 +87,6 @@ def manage_id_tags(tag_id):
             del SHARED_DATA['registered_id_tags'][tag_id]
             return jsonify({"message": f"ID Tag {tag_id} deleted"}), 200
         return jsonify({"error": "ID Tag not found"}), 404
-
-
-# def start_flask_app():
-#     """Flask 서버를 별도의 스레드에서 실행합니다."""
-#     print(f"[info] Flask Management Server started on http://{OCPP_HOST}:{FLASK_PORT}")
-#     app.run(host=OCPP_HOST, port=FLASK_PORT, debug=False, use_reloader=False)
 
 
 basedir = os.path.abspath(os.path.dirname(__file__))

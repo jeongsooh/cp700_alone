@@ -2,12 +2,13 @@
 import asyncio
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
-from shared_data import SHARED_DATA
+from ocpp16.data_manager import JsonConfigManager
+from models import Card
 
 class SendMessage(BaseModel):
     messageId: str
@@ -22,14 +23,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+JSON_FILE = 'ocpp16/shared_data.json'
+
+card = Card()
+data_manager = JsonConfigManager(JSON_FILE)
 connected_clients = {}  # client_id → websocket
 pending_responses = {}  # client_id → asyncio.Future
 
 # --- 🔌 OCPP 서버 설정 ---
 OCPP_HOST = '127.0.0.1'
 OCPP_PORT = 443
-CERT_FILE = 'certificate/cert.pem' 
-KEY_FILE = 'certificate/key.pem'
+# CERT_FILE = 'certificate/cert.pem' 
+# KEY_FILE = 'certificate/key.pem'
+CERT_FILE = 'certificate/open-ocpp_central-system.crt' 
+KEY_FILE = 'certificate/open-ocpp_central-system.key'
 HB_INTERVAL = 180 # Heartbeat 주기 (초)
 
 
@@ -38,7 +45,8 @@ HB_INTERVAL = 180 # Heartbeat 주기 (초)
 async def ocpp_connection_handler(websocket, path):
     """새로운 웹소켓 연결을 처리하고, 메시지를 ocpp_message.py로 라우팅합니다."""
     try:
-        if not path.startswith('/openocpp/'):
+        # if not path.startswith('/openocpp/'):
+        if not path.startswith('/'):
             return await websocket.close()
             
         charger_id = path.split('/')[-1]
@@ -71,11 +79,20 @@ async def ocpp_connection_handler(websocket, path):
             del connected_clients[charger_id]
         print(f"[{charger_id}] [info] 연결 해제. 현재 연결 수: {len(connected_clients)}")
 
-@app.websocket("/openocpp/{charger_id}")
+# @app.websocket("/openocpp/{charger_id}")
+@app.websocket("/{charger_id}")
 async def ws_endpoint(websocket: WebSocket, charger_id: str):
     await websocket.accept()
-    connected_clients[charger_id] = websocket
-    print(f"Client {charger_id} connected")
+
+    # if charger_id in SHARED_DATA['registered_chargers']:
+    SHARED_DATA = data_manager.load_data()
+    if charger_id in SHARED_DATA['registered_chargers']:
+        connected_clients[charger_id] = websocket
+        print(f"Client {charger_id} connected")
+    else:
+        print(f"Client {charger_id} not registered. Closing connection.")
+        await websocket.close()
+        return
 
     try:
         while True:
@@ -95,52 +112,33 @@ async def ws_endpoint(websocket: WebSocket, charger_id: str):
 @app.post("/send")
 async def send_to_client(request_body: SendMessage):
     charger_id = request_body.charger_id
-    messageId = request_body.messageId
 
-    payload_data = {"memberId": "admin", "targetcp": charger_id}
-    payload = {"messageId": messageId, "charger_id": charger_id}
-    unique_id = str(uuid.uuid4())
-
-    data_transfer_call = [
-        2, # Call
-        unique_id,
-        "DataTransfer",
-        {
-            "vendorId": "gresystem",
-            "messageId": messageId,
-            "data": json.dumps(payload_data) # OCPP DataTransfer 스펙에 따라 'data'는 문자열(JSON String)이어야 합니다.
-        }
-    ]
-
-    message_to_send = json.dumps(data_transfer_call)
+    timeout_seconds = 30.0
 
     if charger_id not in connected_clients:
         return {"error": "Client not connected"}
-
-    websocket = connected_clients[charger_id]
     # 응답을 기다릴 Future 생성
-    loop = asyncio.get_running_loop()
-    future = loop.create_future()
-    pending_responses[unique_id] = future
-
-    # 메시지 전송
-    await websocket.send_text(message_to_send)
-    print(f"[{charger_id}] [send] Request for {message_to_send}")
+    if charger_id not in pending_responses:
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        pending_responses[charger_id] = future
+        print(f"[HTTP] 충전기 '{charger_id}'의 다음 Authorize idTag를 {timeout_seconds}초 동안 대기합니다.")
 
     try:
         # 클라이언트의 응답을 대기
-        response = await asyncio.wait_for(future, timeout=60)
-        cardnumber = response.get('data')
+        response = await asyncio.wait_for(future, timeout=timeout_seconds)
+        cardnumber = response.get('idTag')
     except asyncio.TimeoutError:
         response = "timeout"
+        cardnumber = None
     finally:
-        pending_responses.pop(unique_id, None)
-    print(f"info: send_to_client 함수가 응답을 받았습니다. charger_id: {charger_id}, response: {response} ")
+        pending_responses.pop(charger_id, None)
+    print(f"info: send_to_client 함수가 응답을 받았습니다. charger_id: {charger_id}, idTag: {response} ")
     return {'cardnumber': cardnumber}
 
-async def handle_boot_notification(charger_id: str, unique_id: str, payload: dict, shared_data: dict, hb_interval: int) -> str:
+async def handle_boot_notification(charger_id: str, unique_id: str, payload: dict, SHARED_DATA: dict, hb_interval: int) -> str:
     # 1. 관리 시스템(Flask)에 등록된 충전기인지 확인
-    if charger_id not in shared_data['registered_chargers']:
+    if charger_id not in SHARED_DATA['registered_chargers']:
         print(f"[{charger_id}] BootNotification Rejected: 관리 시스템에 미등록된 ID")
         error_response = [4, unique_id, "SecurityError", "Charger ID not registered", {}]
         return json.dumps(error_response)
@@ -148,35 +146,43 @@ async def handle_boot_notification(charger_id: str, unique_id: str, payload: dic
     # 2. 서버 로직 처리 및 응답 생성
     vendor = payload.get('chargePointVendor')
     model = payload.get('chargePointModel')
+
+    if SHARED_DATA['registered_chargers'][charger_id]['chargePointVendor'] != vendor or SHARED_DATA['registered_chargers'][charger_id]['chargePointModel'] != model:
+        print(f"[{charger_id}] BootNotification Rejected: Charger details are not identical")
+        error_response = [4, unique_id, "SecurityError", "Charger details are not identical", {}]
+        return json.dumps(error_response)
     
     response_payload = {
         "status": "Accepted",
-        "currentTime": datetime.utcnow().isoformat() + "Z",
+        "currentTime": datetime.now(timezone.utc).isoformat() + "Z",
         "interval": hb_interval
     }
-    
     return json.dumps([3, unique_id, response_payload])
 
-async def handle_authorize(charger_id: str, unique_id: str, payload: dict, shared_data: dict) -> str:
+async def handle_authorize(charger_id: str, unique_id: str, payload: dict, SHARED_DATA: dict) -> str:
     """
     Authorize 요청을 처리하고 응답을 생성합니다.
     관리 시스템(SHARED_DATA)에 등록된 ID Tag인지 확인합니다.
     """
+    if charger_id in pending_responses:
+        await set_future_result(charger_id, payload)
+
     id_tag = payload.get('idTag')
-    tag_info = shared_data['registered_id_tags'].get(id_tag)
+    SHARED_DATA = data_manager.load_data()
     
-    if tag_info and tag_info['status'] == 'Accepted':
-        status = 'Accepted'
-        print(f"[{charger_id}] 🔑 Authorize 승인: ID Tag {id_tag}")
+    if id_tag in SHARED_DATA['registered_id_tags']:
+        tag_info = {
+            'status': SHARED_DATA['registered_id_tags'][id_tag]['status'],
+            'expiryDate': SHARED_DATA['registered_id_tags'][id_tag]['expiryDate']
+        }   
     else:
-        status = 'Invalid'
-        print(f"[{charger_id}] 🔑 Authorize 거부: ID Tag {id_tag}")
+        tag_info = {
+            'status': 'Invalid',
+            'expiryDate': None
+        }
 
     response_payload = {
-        "idTagInfo": {
-            "status": status,
-            "expiryDate": tag_info.get('expiryDate') if tag_info else None
-        }
+        "idTagInfo": tag_info
     }
     return json.dumps([3, unique_id, response_payload])
 
@@ -207,12 +213,17 @@ async def route_ocpp_message(charger_id: str, message: str, websocket, shared_da
                 # SHARED_DATA 인자를 전달
                 response_message = await handle_authorize(charger_id, unique_id, payload, shared_data)
             elif action == "Heartbeat":
-                # Heartbeat 처리 로직
-                response_message = json.dumps([3, unique_id, {"currentTime": datetime.utcnow().isoformat() + "Z"}])
+                # Heartbeat 처리 로직 datetime.now(timezone.utc).isoformat() + "Z"
+                response_message = json.dumps([3, unique_id, {"currentTime": datetime.now(timezone.utc).isoformat() + "Z"}])
             elif action == "DataTransfer":
                 # 여기서는 충전기가 서버로 보낸 DataTransfer 요청에 대한 응답을 처리합니다.
                 # 예시: 서버는 단순히 'Accepted'를 응답
                 response_payload = {"status": "Accepted"}
+                response_message = json.dumps([3, unique_id, response_payload])
+            elif action == "StatusNotification":
+                # 여기서는 충전기가 서버로 보낸 DataTransfer 요청에 대한 응답을 처리합니다.
+                # 예시: 서버는 단순히 'Accepted'를 응답
+                response_payload = {}
                 response_message = json.dumps([3, unique_id, response_payload])
             else:
                 # 지원하지 않는 Action
@@ -230,7 +241,7 @@ async def route_ocpp_message(charger_id: str, message: str, websocket, shared_da
             unique_id = data[1]
             response_payload = data[2]
 
-            await set_future_result(unique_id, response_payload)
+            # await set_future_result(unique_id, response_payload)
 
     except Exception as e:
         print(f"[{charger_id}] [error] 메시지 처리 중 오류 발생 in route_ocpp_message(): {e}")

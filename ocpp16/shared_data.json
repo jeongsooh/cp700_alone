@@ -1,0 +1,26 @@
+{
+    "registered_chargers": {
+        "CHG-TEST-001": {
+            "chargePointVendor": "Test",
+            "chargePointModel": "A1",
+            "connected": false
+        },
+        "PL10200787": {
+            "chargePointVendor": "GRESYSTEM",
+            "chargePointModel": "CP700P",
+            "connected": false
+        },
+        "JY710102": {
+            "chargePointVendor": "Jinyoung",
+            "chargePointModel": "JY-070-W4",
+            "connected": false
+        }
+    },
+    "registered_id_tags": {
+        "00000000F0C8FADD": {
+            "status": "Accepted",
+            "cardname": "DoE",
+            "expiryDate": "2026-12-09T05:36:10Z"
+        }
+    }
+}

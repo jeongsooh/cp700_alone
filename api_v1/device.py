@@ -3,14 +3,15 @@ import requests
 from flask import jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import Fcuser, db, Energy, Card, Scheduled
-# from ocpp16.shared_data import GLOBAL_OCPP_LOOP
-# from ocpp16.ocpp_message import get_cardtag
 from . import api
-
-from datetime import datetime
+from ocpp16.data_manager import JsonConfigManager
+from datetime import datetime, timezone, timedelta
 
 SERVER_URL = "https://127.0.0.1:443/send"   # FastAPI 서버 주소
 CERT_FILE = 'certificate/cert.pem' 
+JSON_FILE = 'ocpp16/shared_data.json'
+
+manager = JsonConfigManager(JSON_FILE)
 
 @api.route('/devices', methods=['GET', 'POST'])
 def devices():
@@ -78,20 +79,21 @@ def card_detail(uid):
         else:
             return jsonify({"error": "Card not found."}), 404
     elif request.method == 'DELETE':
-        card = Card.query.filter(Card.id == uid).first()
+        card = manager.get_nth_id_tag(int(uid))
         if card:
-            db.session.delete(card)
-            db.session.commit()
+            manager.delete_id_tag(card)
             return jsonify({"message": "Card deleted successfully."}), 200
         else:
             return jsonify({"error": "Card not found."}), 404
     
-    data = request.get_json()
-
-    Card.query.filter(Card.id == uid).update(data)
-    db.session.commit()
-    card = Card.query.filter(Card.id == uid).first()
-    return jsonify(card.serialize)
+    cards = manager.load_data()
+    count = 0
+    response = []
+    for id_tag, info in cards.get('registered_id_tags', {}).items():
+        card = {'id': count, 'cardname': info.get('cardname', ''), 'cardnumber': id_tag, 'status': info.get('status', ''), 'expirydate': info.get('expiryDate', '')}
+        response.append(card)
+        count += 1
+    return jsonify(response)
 
 @api.route('/cards', methods=['GET', 'POST'])
 def cards():
@@ -99,18 +101,28 @@ def cards():
         data = request.get_json()
         cardname = data.get('cardname')
         cardnumber = data.get('cardnumber')
+        status = data.get('status')
+        expirydate = datetime.now(timezone.utc) + timedelta(days=365)  # 예시: 1년 후 만료
 
         if not (cardname and cardnumber):
             return jsonify({"error": "All fields are required."}), 400
-        card = Card()
-        card.cardname = cardname
-        card.cardnumber = cardnumber
 
-        db.session.add(card)
-        db.session.commit()
+        manager.update_id_tag(
+            id_tag=cardnumber, 
+            status=status, 
+            cardname=cardname, 
+            expiry_days=365 # 1년 후 만료
+        )
         return jsonify({"message": "Card added successfully."}), 201
-    cards = Card.query.all()
-    return jsonify([card.serialize for card in cards])
+
+    cards = manager.load_data()
+    count = 0
+    response = []
+    for id_tag, info in cards.get('registered_id_tags', {}).items():
+        card = {'id': count, 'cardname': info.get('cardname', ''), 'cardnumber': id_tag, 'status': info.get('status', ''), 'expirydate': info.get('expiryDate', '')}
+        response.append(card)
+        count += 1
+    return jsonify(response)
 
 @api.route('/registeronline', methods=['GET', 'POST'])
 def cards_online():
@@ -124,9 +136,7 @@ def cards_online():
         
         # 서버에 메시지 전달
         payload = {"messageId": "uvCardRegister", "charger_id": charger_id}
-        # message_id = str(uuid.uuid4())
-        # message = [2, message_id, "DataTransfer", payload]
-        # message_to_send = json.dumps(message)
+
         res = requests.post(SERVER_URL, 
             json=payload,
             # verify=CERT_FILE
@@ -141,19 +151,24 @@ def cards_online():
 
         cardnumber = res.json().get('cardnumber')
         if cardnumber is None:
-            # return jsonify({"error": "Charger ID and Card name are both required."}), 400
             print("error: Card number is not retrieved.")
             return
         
-        card = Card()
-        card.cardname = cardname
-        card.cardnumber = cardnumber  # Placeholder for card number, to be set by NFC reader
-
-        db.session.add(card)
-        db.session.commit()
+        manager.update_id_tag(
+            id_tag=cardnumber, 
+            status="Accepted", 
+            cardname=cardname, 
+            expiry_days=365 # 1년 후 만료
+        )
         return jsonify({"message": "Card added successfully."}), 201
-    cards = Card.query.all()
-    return jsonify([card.serialize for card in cards])
+    cards = manager.load_data()
+    count = 0
+    response = []
+    for id_tag, info in cards.get('registered_id_tags', {}).items():
+        card = {'id': count, 'cardname': info.get('cardname', ''), 'cardnumber': id_tag, 'status': info.get('status', ''), 'expirydate': info.get('expiryDate', '')}
+        response.append(card)
+        count += 1
+    return jsonify(response)
 
 @api.route('/scheduled', methods=['GET', 'POST'])
 def scheduled():
@@ -169,8 +184,6 @@ def scheduled():
         schedule.timezone = timezone
         schedule.starttime = starttime
         schedule.endtime = endtime
-        # schedule.starttime = datetime.strptime(starttime, "%H:%M")
-        # schedule.endtime = datetime.strptime(endtime, "%H:%M")
 
         db.session.add(schedule)
         db.session.commit()
