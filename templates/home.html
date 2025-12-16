@@ -63,7 +63,7 @@
     }
     function schedule_enable() {
         $.ajax({
-            url: `/api/v1/devices/1`,
+            url: `/api/v1/scheduled/1`,
             type: 'PUT',
             beforeSend: function(xhr) {
                 xhr.setRequestHeader("Authorization", "Bearer " + $.cookie("access_token"));
@@ -140,7 +140,6 @@
             <td scope="row">${device.id}</td>
             <td>${device.serialnumber}</td>
             <td>${device.maxcurrent}</td>
-            <td>${device.schedule_enabled}</td>
             <td>
                 <a class="btn btn-danger btn-sm" onclick="device_delete(${device.id})">Delete</a>
             </td>
@@ -148,13 +147,6 @@
 
             content.appendChild(row);
         });
-        const scheduleStatus = document.getElementById('schedule-status');
-        const enabled = devices.some(device => device.schedule_enabled);
-        scheduleStatus.innerHTML = `
-            <h5>Scheduled Charging: <span class="${enabled ? 'text-success' : 'text-danger'}">
-                ${enabled ? 'Enabled' : 'Disabled'}
-            </span></h5>
-        `;
         })
         .catch(error => {
             console.error('Failed to get Device list:', error);
@@ -173,6 +165,7 @@
 
             row.innerHTML = `
             <td scope="row">${schedule.id}</td>
+            <td>${schedule.priority}</td>
             <td>${schedule.timezone}</td>
             <td>${schedule.starttime}</td>
             <td>${schedule.endtime}</td>
@@ -183,10 +176,52 @@
 
             content.appendChild(row);
         });
+        const scheduleStatus = document.getElementById('schedule-status');
+        const enabled = schedules.some(schedule => schedule.schedule_enabled);
+        scheduleStatus.innerHTML = `
+            <h5>Scheduled Charging: <span class="${enabled ? 'text-success' : 'text-danger'}">
+                ${enabled ? 'Enabled' : 'Disabled'}
+            </span></h5>
+        `;
         })
         .catch(error => {
             console.error('Failed to get Schedule list:', error);
         });
+</script>
+<script>
+    const source = new EventSource('/stream'); 
+
+    source.onopen = function() {
+        document.getElementById('energy-status').innerHTML = "서버 연결 성공. 데이터를 기다리는 중...";
+        console.log("SSE 연결이 성공적으로 수립되었습니다.");
+    };
+
+    source.onmessage = function(event) {
+        const receivedData = event.data; 
+        
+        const container = document.getElementById('energy-status');
+        
+        container.innerHTML = `<p>Time: ${new Date().toLocaleTimeString()} - Current: <strong>${receivedData}</strong></p>`;
+        
+        container.scrollTop = container.scrollHeight;
+        
+        console.log("새로운 데이터 수신:", receivedData);
+    };
+    
+    // 4. 특정 이벤트 이름을 지정하여 처리 (옵션)
+    // 만약 서버가 event: 'temperature' 형태로 데이터를 보낸다면 이 핸들러가 작동합니다.
+    source.addEventListener('temperature', function(event) {
+            const temp = JSON.parse(event.data);
+            console.log("온도 데이터 수신:", temp.value);
+            // 해당 온도 데이터를 처리하는 로직 추가
+    });
+
+    // 5. 연결 오류 핸들러
+    source.onerror = function(error) {
+        console.error("SSE 연결 오류 발생:", error);
+        document.getElementById('energy-status').innerHTML = "SSE 연결 오류 발생. 재연결 시도 중...";
+        // EventSource는 기본적으로 연결이 끊어지면 자동으로 재연결을 시도합니다.
+    };
 </script>
 {% endblock %}
 {% block contents %}
@@ -200,7 +235,8 @@
     </div>
     <div class="row mt-5">
         <div class="col-12 col-md-6"> 
-            <h4>Wifi Device settings</h4>
+            <h4>Power Monitor settings</h4>
+            <div id="energy-status"></div>
             <div class="table-responsive">
                 <table class="table table-light">
                     <thead class="thead-light">
@@ -208,7 +244,6 @@
                         <th scope="col">#</th>
                         <th scope="col">Serial Number</th>
                         <th scope="col">Max. Current[A]</th>
-                        <th scope="col">Schedule_enabled</th>
                         <th scope="col">Delete</th>
                         </tr>
                     </thead>
@@ -256,6 +291,7 @@
                 <thead class="thead-light">
                     <tr>
                     <th scope="col">#</th>
+                    <th scope="col">Priority</th>
                     <th scope="col">Time Zone</th>
                     <th scope="col">Start Time</th>
                     <th scope="col">End Time</th>

@@ -8,11 +8,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 from ocpp16.data_manager import JsonConfigManager
-from models import Card
+from ocpp16.shared_data import ENERGY_USAGE_DATA
 
 class SendMessage(BaseModel):
     messageId: str
-    charger_id: str
+    chargerId: str
+    data: dict
 
 app = FastAPI()
 app.add_middleware(
@@ -25,7 +26,6 @@ app.add_middleware(
 
 JSON_FILE = 'ocpp16/shared_data.json'
 
-card = Card()
 data_manager = JsonConfigManager(JSON_FILE)
 connected_clients = {}  # client_id → websocket
 pending_responses = {}  # client_id → asyncio.Future
@@ -111,30 +111,39 @@ async def ws_endpoint(websocket: WebSocket, charger_id: str):
 
 @app.post("/send")
 async def send_to_client(request_body: SendMessage):
-    charger_id = request_body.charger_id
+    message_id = request_body.messageId
+    payload = request_body.data
+    charger_id = request_body.chargerId
+    print(f"[HTTP] /send 엔드포인트 호출 - charger_id: {charger_id}, messageId: {message_id}, payload: {payload}")
 
     timeout_seconds = 30.0
 
-    if charger_id not in connected_clients:
-        return {"error": "Client not connected"}
-    # 응답을 기다릴 Future 생성
-    if charger_id not in pending_responses:
-        loop = asyncio.get_running_loop()
-        future = loop.create_future()
-        pending_responses[charger_id] = future
-        print(f"[HTTP] 충전기 '{charger_id}'의 다음 Authorize idTag를 {timeout_seconds}초 동안 대기합니다.")
+    if message_id == "uvCardRegister":
+        if charger_id not in connected_clients:
+            return {"error": "Client not connected"}
+        # 응답을 기다릴 Future 생성
+        if charger_id not in pending_responses:
+            loop = asyncio.get_running_loop()
+            future = loop.create_future()
+            pending_responses[charger_id] = future
+            print(f"[HTTP] 충전기 '{charger_id}'의 다음 Authorize idTag를 {timeout_seconds}초 동안 대기합니다.")
 
-    try:
-        # 클라이언트의 응답을 대기
-        response = await asyncio.wait_for(future, timeout=timeout_seconds)
-        cardnumber = response.get('idTag')
-    except asyncio.TimeoutError:
-        response = "timeout"
-        cardnumber = None
-    finally:
-        pending_responses.pop(charger_id, None)
-    print(f"info: send_to_client 함수가 응답을 받았습니다. charger_id: {charger_id}, idTag: {response} ")
-    return {'cardnumber': cardnumber}
+        try:
+            # 클라이언트의 응답을 대기
+            response = await asyncio.wait_for(future, timeout=timeout_seconds)
+            cardnumber = response.get('idTag')
+        except asyncio.TimeoutError:
+            response = "timeout"
+            cardnumber = None
+        finally:
+            pending_responses.pop(charger_id, None)
+        print(f"info: send_to_client 함수가 응답을 받았습니다. charger_id: {charger_id}, idTag: {response} ")
+        return {'cardnumber': cardnumber}
+    elif message_id == "scheduledCharging":
+        print(f"[HTTP] scheduledCharging 메시지 처리 중 - charger_id: {charger_id} payload: {payload}")
+    elif message_id == "energyUsage":
+        energy_usage_data = payload
+        print(f"[HTTP] Energy usage 메시지 처리 중 - charger_id: {charger_id} payload: {energy_usage_data}")
 
 async def handle_boot_notification(charger_id: str, unique_id: str, payload: dict, SHARED_DATA: dict, hb_interval: int) -> str:
     # 1. 관리 시스템(Flask)에 등록된 충전기인지 확인

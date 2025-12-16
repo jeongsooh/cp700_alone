@@ -7,6 +7,7 @@
             contentType: "application/json",
             method: "POST",
             data: JSON.stringify({
+                priority: $("#priority").val(),
                 timezone: $("#timezone").val(),
                 starttime: $("#starttime").val(),
                 endtime: $("#endtime").val()
@@ -91,6 +92,13 @@
     <div class="row mt-5">
         <div class="col-12">
             <form id="range">
+                <div class="form-group">
+                    <label for="priority">Priority</label>
+                    <select id="priority" class="form-select">
+                        <option value="default">Default</option>
+                        <option value="priority">Priority</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label for="timezone">Timezone</label>
                     <select id="timezone" class="form-select">

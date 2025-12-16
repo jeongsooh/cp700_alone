@@ -1,10 +1,5 @@
 {
     "registered_chargers": {
-        "CHG-TEST-001": {
-            "chargePointVendor": "Test",
-            "chargePointModel": "A1",
-            "connected": false
-        },
         "PL10200787": {
             "chargePointVendor": "GRESYSTEM",
             "chargePointModel": "CP700P",
@@ -20,7 +15,25 @@
         "00000000F0C8FADD": {
             "status": "Accepted",
             "cardname": "DoE",
-            "expiryDate": "2026-12-09T05:36:10Z"
+            "expiryDate": "2026-12-12T07:55:25Z"
+        }
+    },
+    "pm_devices": {
+        "MTR123456": "100"
+    },
+    "scheduled_charging": false,
+    "schedules": {
+        "default": {
+            "priority": "default",
+            "timezone": "America/Los_Angeles",
+            "starttime": "20:00",
+            "endtime": "08:30"
+        },
+        "priority": {
+            "priority": "priority",
+            "timezone": "America/Los_Angeles",
+            "starttime": "19:00",
+            "endtime": "08:30"
         }
     }
 }

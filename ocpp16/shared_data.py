@@ -1,5 +1,6 @@
 # shared_data.py
 import asyncio
+import threading
 from typing import Dict, Any, Optional
 
 # --- OCPP 서버 설정 ---
@@ -12,6 +13,28 @@ KEY_FILE = 'certificate/key.pem'
 HB_INTERVAL = 180 # Heartbeat 주기 (초)
 FLASK_PORT = 5000
 
+ENERGY_USAGE_DATA = {"voltage": "", "current": "", "power": ""}
+class EnergyUsageData:
+    def __init__(self):
+
+        self._lock = threading.Lock()
+        
+    def update_data(self, voltage: Any, current: Any, power: Any) -> None:
+        with self._lock:
+            ENERGY_USAGE_DATA["voltage"] = float(voltage)
+            ENERGY_USAGE_DATA["current"] = float(current)
+            ENERGY_USAGE_DATA["power"] = float(power)
+            # self._data["voltage"] = voltage
+            # self._data["current"] = current
+            # self._data["power"] = power
+            
+    def get_data(self) -> Dict[str, Any]:
+        with self._lock:
+            voltage = ENERGY_USAGE_DATA.get("voltage", 0.0)
+            current = ENERGY_USAGE_DATA.get("current", 0.0)
+            power = ENERGY_USAGE_DATA.get("power", 0.0)
+            return {"voltage": voltage, "current": current, "power": power}
+    
 # --- 💾 공유 데이터 저장소 (DB 대체) ---
 # registered_chargers: GRE + Serial Number 기반 충전기 등록 정보
 SHARED_DATA = {

@@ -70,6 +70,57 @@ class JsonConfigManager:
         self.save_data(data)
         print(f"[ID Tag] '{id_tag}'이(가) 상태 '{status}'로 업데이트/추가되었습니다.")
 
+    def update_pm_device(self, serialnumber: str, maxcurrent: str):
+        
+        data = self.load_data()
+        
+        devices = data.get('pm_devices', {})
+        
+        # 데이터 업데이트/추가
+        devices[serialnumber] = maxcurrent
+        data['pm_devices'] = devices
+        
+        self.save_data(data)
+        print(f"[PM Device] '{serialnumber}'이(가) 업데이트/추가되었습니다.")
+
+    def update_schedules(self, priority: str, timezone: str, starttime: str, endtime: str):
+        
+        data = self.load_data()
+        
+        schedules = data.get('schedules', {})
+        print(schedules, schedules.get(priority))
+        
+        # 데이터 업데이트/추가
+        if schedules.get(priority):
+            schedules[priority] = {
+                "priority": priority,
+                "timezone": timezone,
+                "starttime": starttime,
+                "endtime": endtime
+            }
+        else:
+            if len(schedules) == 0:
+                schedules['default'] = {
+                    "priority": "default",
+                    "timezone": timezone,
+                    "starttime": starttime,
+                    "endtime": endtime
+                }
+            elif len(schedules) == 1:
+                schedules['priority'] = {
+                    "priority": "priority",
+                    "timezone": timezone,
+                    "starttime": starttime, 
+                    "endtime": endtime
+                }
+            else:
+                print("Schedules are full. Update or delete one of existing schedules.")
+
+            data['schedules'] = schedules
+            
+        self.save_data(data)
+        print(f"[Schedules] '{priority} schedule'이(가) 업데이트/추가되었습니다.")
+
     def delete_id_tag(self, id_tag: str):
         """특정 ID Tag를 데이터에서 삭제합니다."""
         data = self.load_data()
@@ -82,6 +133,32 @@ class JsonConfigManager:
             print(f"[ID Tag] '{id_tag}'이(가) 삭제되었습니다.")
         else:
             print(f"[ID Tag] '{id_tag}'을(를) 찾을 수 없어 삭제를 건너뜁니다.")
+
+    def delete_pm_device(self, serialnumber: str):
+        """특정 device를 데이터에서 삭제합니다."""
+        data = self.load_data()
+        devices = data.get('pm_devices', {})
+        
+        if serialnumber in devices:
+            del devices[serialnumber]
+            data['pm_devices'] = devices
+            self.save_data(data)
+            print(f"[PM Device] '{serialnumber}'이(가) 삭제되었습니다.")
+        else:
+            print(f"[PM Device] '{serialnumber}'을(를) 찾을 수 없어 삭제를 건너뜁니다.")
+
+    def delete_schedule(self, schedule: str):
+        """특정 device를 데이터에서 삭제합니다."""
+        data = self.load_data()
+        schedules = data.get('schedules', {})
+        
+        if schedule in schedules:
+            del schedules[schedule]
+            data['schedules'] = schedules
+            self.save_data(data)
+            print(f"[Schedules] '{schedule}'이(가) 삭제되었습니다.")
+        else:
+            print(f"[Schedules] '{schedule}'을(를) 찾을 수 없어 삭제를 건너뜁니다.")
 
     def get_nth_id_tag(self, n: int) -> Dict[str, Any]:
         """
@@ -103,6 +180,28 @@ class JsonConfigManager:
         id_tag_key = list(id_tags.keys())[n]
         # return {id_tag_key: id_tags[id_tag_key]}
         return id_tag_key
+
+    def get_nth_pm_device(self, n: int) -> Dict[str, Any]:
+        data = self.load_data()
+        devices = data.get('pm_devices', {})
+        
+        if n < 0 or n >= len(devices):
+            print(f"[PM Device] 인덱스 {n}이(가) 범위를 벗어났습니다.")
+            return {}
+        
+        device = list(devices.keys())[n]
+        return device
+
+    def get_nth_schedule(self, n: int) -> Dict[str, Any]:
+        data = self.load_data()
+        schedules = data.get('schedules', {})
+        
+        if n < 0 or n >= len(schedules):
+            print(f"[Schedules] 인덱스 {n}이(가) 범위를 벗어났습니다.")
+            return {}
+        
+        schedule = list(schedules.keys())[n]
+        return schedule
 
 
 # --- 사용 예시 ---

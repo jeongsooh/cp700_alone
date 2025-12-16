@@ -1,18 +1,49 @@
 # app.py
 import os
-import asyncio
-from flask import Flask, render_template, request, jsonify
+import redis
+import time
+import json
+from datetime import datetime
+from flask import Flask, render_template, request, jsonify, Response
 from flask_jwt_extended import create_access_token
 from flask_jwt_extended import JWTManager
 from models import db, Fcuser
 from api_v1 import api as api_v1
 from api_v1.user import create_default_user
+from ocpp16.shared_data import EnergyUsageData
 
 app = Flask(__name__)
 app.register_blueprint(api_v1, url_prefix='/api/v1')
-FLASK_PORT = 5000
+
+r = redis.Redis(decode_responses=True)
+pubsub = r.pubsub()
+pubsub.subscribe('energy_updates')
+
+FLASK_PORT = 5001
 OCPP_HOST = '0.0.0.0'
 OCPP_PORT = 443
+
+def event_stream():
+    """3초마다 현재 시간을 SSE 형식으로 반환하는 제너레이터"""
+    while True:
+        current_time = datetime.now().strftime("%H:%M:%S")
+
+        for message in pubsub.listen():
+            if message['type'] == 'message':
+                data = message['data']
+                yield f"data: {data}\n\n"
+        
+        time.sleep(3)
+
+
+@app.route("/stream")
+def sse_endpoint():
+    # 2. Flask의 Response 객체를 사용하여 응답을 스트리밍합니다.
+    return Response(
+        event_stream(),  # 제너레이터 함수를 응답 내용으로 전달
+        # 3. 필수 SSE 헤더 설정: Content-Type: text/event-stream
+        mimetype="text/event-stream"
+    )
 
 @app.route('/chpasswd')
 def chpasswd():
