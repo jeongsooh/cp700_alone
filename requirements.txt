@@ -47,6 +47,7 @@ fastapi==0.122.0
 filelock==3.8.0
 finance-datareader==0.9.94
 Flask==2.3.3
+flask-cors==6.0.2
 Flask-JWT-Extended==4.7.1
 Flask-SQLAlchemy==3.1.1
 Flask-WTF==1.2.2
