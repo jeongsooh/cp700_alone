@@ -230,68 +230,70 @@
         <h1>CP700P Settings</h1>
     </div>
     <div class="text-end" id="logout-div">
-        <button class="btn btn-primary" onclick="location.href='/chpasswd'">Change Password</button>
-        <button class="btn btn-primary" onclick="logout();">Logout</button>
+            <button class="btn btn-primary btn-sm" onclick="location.href='/chpasswd'">Change Password</button>
+            <button class="btn btn-primary btn-sm" onclick="logout();">Logout</button>
     </div>
     <div class="row mt-5">
-        <div class="col-12 col-md-6"> 
-            <h4>Power Monitor settings</h4>
-            <div id="energy-status"></div>
-            <div class="table-responsive">
-                <table class="table table-light">
-                    <thead class="thead-light">
-                        <tr>
-                        <th scope="col">#</th>
-                        <th scope="col">Serial Number</th>
-                        <th scope="col">Max. Current[A]</th>
-                        <th scope="col">Delete</th>
-                        </tr>
-                    </thead>
-                    <tbody class="text-dark" id="device-content">
-                    </tbody>
-                </table>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="location.href='/devregister'">Add Device</button>
-        </div>
-        <div class="col-12 col-md-6">
-            <h4>Charging Cards Registration</h4>
-            <div class="table-responsive">
-                <table class="table table-light">
-                    <thead class="thead-light">
-                        <tr>
-                        <th scope="col">#</th>
-                        <th scope="col">Card Name</th>
-                        <th scope="col">Card Number</th>
-                        <th scope="col">Card Status</th>
-                        <th scope="col">Expiry Date</th>
-                        <th scope="col">Delete</th>
-                        </tr>
-                    </thead>
-                    <tbody class="text-dark" id="card-content">
-                    </tbody>
-                </table>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="location.href='/cardregister'">Add Card</button>
-            <button class="btn btn-primary btn-sm" onclick="location.href='/cardregisteronline'">Online Registration</button>
-        </div>
+        <ul class="nav nav-pills mb-3 nav-justified" id="pills-tab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="pills-device-tab" data-bs-toggle="pill" data-bs-target="#pills-device" type="button" role="tab" aria-controls="pills-device" aria-selected="true">Power Meter</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pills-card-tab" data-bs-toggle="pill" data-bs-target="#pills-card" type="button" role="tab" aria-controls="pills-card" aria-selected="false">Charging Card</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pills-schedule-tab" data-bs-toggle="pill" data-bs-target="#pills-schedule" type="button" role="tab" aria-controls="pills-schedule" aria-selected="false">Charging Schedule</button>
+            </li>
+        </ul>
     </div>
-    <div class="row mt-5">
-        <h4>Scheduled Charging Settings</h4>
-        <h5>1. Click the ENABLE button to enable scheduled charging.</h5>
-        <h5>2. While charging, if you tag a charging card or disconnect the cable, the charging will be stopped.</h5>
-        <h5>3. Even if scheduled charging is enabled, it will be bypassed if a card authenticates and connects the cable to begin charging immediately.</h5>
-    </div>
-    <div class="row mt-3 col-12">
-        <div class="col-4">
-            <div id="schedule-status"></div>
-            <button class="btn btn-primary btn-sm" onclick="schedule_enable()">Toggle to Enable / Disable Schedule</button>
-        </div>
-        <div class="col-8">
+    <div class="tab-content" id="pills-tabContent">
+        <div class="tab-pane fade show active" id="pills-device" role="tabpanel" aria-labelledby="pills-device-tab" tabindex="0">
+            <h4>Power Meter settings</h4>
+            <div class="mb-3" id="energy-status"></div>
             <table class="table table-light">
                 <thead class="thead-light">
                     <tr>
                     <th scope="col">#</th>
-                    <th scope="col">Priority</th>
+                    <th scope="col">Serial Number</th>
+                    <th scope="col">Max. Current[A]</th>
+                    <th scope="col">Schedule_enabled</th>
+                    <th scope="col">Delete</th>
+                    </tr>
+                </thead>
+                <tbody class="text-dark" id="device-content">
+                </tbody>
+            </table>
+            <button class="btn btn-primary btn-sm" onclick="location.href='/devregister'">Add Device</button>
+        </div>
+        <div class="tab-pane fade" id="pills-card" role="tabpanel" aria-labelledby="pills-card-tab" tabindex="0">
+            <table class="table table-light">
+                <thead class="thead-light">
+                    <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Card Name</th>
+                    <th scope="col">Card Number</th>
+                    <th scope="col">Delete</th>
+                    </tr>
+                </thead>
+                <tbody class="text-dark" id="card-content">
+                </tbody>
+            </table>
+            <button class="btn btn-primary btn-sm" onclick="location.href='/cardregister'">Add Card</button>
+            <button class="btn btn-primary btn-sm" onclick="location.href='/cardregisteronline'">Online Registration</button>
+        </div>
+        <div class="tab-pane fade" id="pills-schedule" role="tabpanel" aria-labelledby="pills-schedule-tab" tabindex="0">
+            <div class="row mb-3">
+                <h5>About Charging Schedule Settings</h5>
+                <h7>1. Click the ENABLE button to enable scheduled charging.</h7>
+                <h7>2. While charging, if you tag a charging card or disconnect the cable, the charging will be stopped.</h7>
+                <h7>3. Even if scheduled charging is enabled, it will be bypassed if a card authenticates and connects the cable to begin charging immediately.</h7>
+            </div>
+            <div id="schedule-status"></div>
+            <button class="btn btn-primary btn-sm" onclick="schedule_enable()">Toggle Enable / Disable Schedule</button>
+            <table class="table table-light">
+                <thead class="thead-light">
+                    <tr>
+                    <th scope="col">#</th>
                     <th scope="col">Time Zone</th>
                     <th scope="col">Start Time</th>
                     <th scope="col">End Time</th>
